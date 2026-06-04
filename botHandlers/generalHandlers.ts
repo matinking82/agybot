@@ -24,6 +24,14 @@ import {
     cloneRepoStartHandler,
     clearChatHandler,
     projectActionHandler,
+    folderNavHandler,
+    folderUpHandler,
+    folderNewHandler,
+    folderSelectHandler,
+    handleNewFolderName,
+    modelSelectionHandler,
+    selectModelHandler,
+    usageStatsHandler,
 } from "./agentHandlers";
 
 export const startHandler = async (ctx: Context, start = true) => {
@@ -108,6 +116,28 @@ export const callBackHandler = async (ctx: Context) => {
         return await confirmDeleteProjectHandler(ctx);
     }
 
+    if (callbackData.startsWith("dir_nav_")) {
+        let index = parseInt(callbackData.split("_")[2]);
+        return await folderNavHandler(ctx, index);
+    }
+
+    if (callbackData === "dir_up") return await folderUpHandler(ctx);
+    if (callbackData === "dir_new") return await folderNewHandler(ctx);
+    if (callbackData === "dir_select") return await folderSelectHandler(ctx);
+
+    if (callbackData === "cancel_folder") {
+        await ctx.answerCallbackQuery({ text: "Cancelled ✅" });
+        await setUserState(userId, UserState.start);
+        return await ctx.reply("✅ Action cancelled.", {
+            reply_markup: adminMenuKeyboard(),
+        });
+    }
+
+    if (callbackData.startsWith("model_select_")) {
+        let index = parseInt(callbackData.split("_")[2]);
+        return await selectModelHandler(ctx, index);
+    }
+
     if (callbackData.startsWith("cancel_")) {
         await ctx.answerCallbackQuery({ text: "Cancelled ✅" });
         return await ctx.reply("✅ Action cancelled.", {
@@ -165,6 +195,10 @@ export const messagesHandler = async (ctx: Context) => {
                 return await systemInfoHandler(ctx);
             case adminMenuOptions.tasks:
                 return await taskHistoryHandler(ctx);
+            case adminMenuOptions.models:
+                return await modelSelectionHandler(ctx);
+            case adminMenuOptions.stats:
+                return await usageStatsHandler(ctx);
         }
     }
 
@@ -189,17 +223,13 @@ export const messagesHandler = async (ctx: Context) => {
             if (!isAdmin) return;
             return await handleProjectName(ctx);
 
-        case UserState.awaiting_project_path:
-            if (!isAdmin) return;
-            return await handleProjectPath(ctx);
-
         case UserState.awaiting_repo_url:
             if (!isAdmin) return;
             return await handleRepoUrl(ctx);
 
-        case UserState.awaiting_clone_path:
+        case UserState.awaiting_new_folder_name:
             if (!isAdmin) return;
-            return await handleClonePath(ctx);
+            return await handleNewFolderName(ctx);
 
         case UserState.awaiting_command:
             if (!isAdmin) return;

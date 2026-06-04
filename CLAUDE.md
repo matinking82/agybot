@@ -43,10 +43,16 @@ The project is built with **TypeScript**, **grammy** (for the Telegram bot), and
 
 ### 6. Core (`/core`)
 - Contains shared utilities and constants.
-- `enums.ts`: Defines `UserState` which is critical for step-by-step conversations (e.g., waiting for a project name vs. waiting for a command).
-- `keyboards.ts`: Centralizes all Telegram inline and custom keyboards (`ReplyKeyboardMarkup`).
+- `enums.ts`: Defines `UserState` which is critical for step-by-step conversations (e.g., waiting for a project name vs. waiting for a command). Added state for new folder creation.
+- `keyboards.ts`: Centralizes all Telegram inline and custom keyboards (`ReplyKeyboardMarkup`). Updated with model selection, usage stats, and project detach options.
 - `logger.ts`: Configures `winston` for application-wide logging.
 - `passwordHelper.ts`: Utility for bcrypt hashing.
+
+### 7. New Features (June 2026)
+- **Model Selection:** Users can choose from a list of models to use for the AI agent via the admin menu. The selected model is saved in `User.data.selectedModel` and passed to the `agy` CLI via the `--model` flag.
+- **Usage Quota Stats:** A new admin menu option that shows the number of projects created, tasks executed, and chat messages sent by the user.
+- **Project Detach:** Users can detach from an active project without deleting it, restoring the workspace context to default.
+- **Interactive Folder Selector:** When creating a new project or cloning a repo, instead of typing paths, users navigate folders interactively using Telegram inline keyboards. This UI allows browsing, creating new folders, and selecting a destination path starting from `/root`.
 
 ---
 

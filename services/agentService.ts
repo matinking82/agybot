@@ -89,7 +89,7 @@ export const cloneRepository = async (repoUrl: string, targetPath: string): Prom
     }
 };
 
-export const runAgyCli = async (prompt: string, cwd?: string): Promise<{ success: boolean; output: string; error?: string }> => {
+export const runAgyCli = async (prompt: string, cwd?: string, model?: string): Promise<{ success: boolean; output: string; error?: string }> => {
     try {
         let workDir = cwd || process.env.AGENT_WORKSPACE || "/tmp/agent-workspace";
 
@@ -101,9 +101,14 @@ export const runAgyCli = async (prompt: string, cwd?: string): Promise<{ success
             section: "runAgyCli",
         });
 
+        let cmd = `echo ${JSON.stringify(prompt)} | agy --prompt -`;
+        if (model) {
+            cmd = `echo ${JSON.stringify(prompt)} | agy --prompt - --model ${JSON.stringify(model)}`;
+        }
+
         // Run agy with the prompt via stdin using --prompt flag
         let { stdout, stderr } = await execAsync(
-            `echo ${JSON.stringify(prompt)} | agy --prompt -`,
+            cmd,
             {
                 cwd: workDir,
                 timeout: 300000, // 5 minute timeout
@@ -170,6 +175,20 @@ export const listDirectory = async (dirPath: string): Promise<{ success: boolean
             output: "",
             error: error.message || "Failed to list directory",
         };
+    }
+};
+
+export const getDirectories = async (dirPath: string): Promise<{ success: boolean; dirs: string[]; error?: string }> => {
+    try {
+        if (!fs.existsSync(dirPath)) {
+            return { success: false, dirs: [], error: `Directory not found: ${dirPath}` };
+        }
+        let items = fs.readdirSync(dirPath, { withFileTypes: true });
+        let dirs = items.filter(i => i.isDirectory()).map(i => i.name).sort();
+        return { success: true, dirs };
+    } catch (error: any) {
+        logger.error(error, { section: "getDirectories" });
+        return { success: false, dirs: [], error: error.message };
     }
 };
 

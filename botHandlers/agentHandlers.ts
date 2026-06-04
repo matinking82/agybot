@@ -70,7 +70,7 @@ export const chatMessageHandler = async (ctx: Context) => {
     let prompt = contextMessages ? `Previous conversation:\n${contextMessages}\n\nUser: ${text}` : text;
 
     // Try to use agy CLI first, fall back to direct command execution
-    let result = await runAgyCli(prompt, activeProjectPath);
+    let result = await runAgyCli(prompt, activeProjectPath, userData?.data?.selectedModel);
 
     if (!result.success) {
         // Fallback: if agy is not available, provide helpful response
@@ -146,71 +146,17 @@ export const handleProjectName = async (ctx: Context) => {
 
     if (!text) return;
 
-    // Store project name temporarily in user data
     let userData = await getUserData(userId);
     let data = userData?.data || {};
     data.pendingProjectName = text;
+    data.pendingOperation = "new";
     await setUserData(userId, data);
 
-    await setUserState(userId, UserState.awaiting_project_path);
-    await ctx.reply(
-        `📁 Project name: *${text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}*\n\n` +
-        "Enter the full path where the project should be created:\n" +
-        `(e.g., ${(process.env.AGENT_WORKSPACE || "/tmp/agent-workspace").replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}/${text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')})`,
-        {
-            parse_mode: "MarkdownV2",
-            reply_markup: cancelKeyboard(),
-        }
-    );
+    await showFolderSelector(ctx, userId, "/root");
 };
 
 export const handleProjectPath = async (ctx: Context) => {
-    let userId = ctx.from?.id;
-    let text = ctx.message?.text;
-
-    if (!text) return;
-
-    let userData = await getUserData(userId);
-    let data = userData?.data || {};
-    let projectName = data.pendingProjectName;
-
-    if (!projectName) {
-        await ctx.reply("❌ Something went wrong. Please start again.");
-        await setUserState(userId, UserState.start);
-        return;
-    }
-
-    // Create the project directory
-    let mkdirResult = await executeCommand(`mkdir -p "${text}"`);
-    if (!mkdirResult.success) {
-        await ctx.reply(`❌ Failed to create directory:\n${mkdirResult.error}`);
-        return;
-    }
-
-    // Save project to database
-    let result = await createProject(projectName, text, userId);
-
-    if (!result.success) {
-        await ctx.reply(`❌ ${result.message}`);
-        return;
-    }
-
-    // Clean up pending data
-    delete data.pendingProjectName;
-    data.activeProjectPath = text;
-    data.activeProjectId = result.data?.id;
-    await setUserData(userId, data);
-
-    await setUserState(userId, UserState.start);
-    await ctx.reply(
-        `✅ Project *${projectName.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}* created\\!\n\n` +
-        `📁 Path: \`${text}\`\n` +
-        `🆔 ID: ${result.data?.id}`,
-        {
-            parse_mode: "MarkdownV2",
-            reply_markup: adminMenuKeyboard(),
-        }
-    );
+    // Deprecated, replaced by folder selector
 };
 
 export const listProjectsHandler = async (ctx: Context) => {
@@ -346,72 +292,17 @@ export const handleRepoUrl = async (ctx: Context) => {
 
     if (!text) return;
 
-    // Store repo URL temporarily
     let userData = await getUserData(userId);
     let data = userData?.data || {};
     data.pendingRepoUrl = text;
+    data.pendingOperation = "clone";
     await setUserData(userId, data);
 
-    await setUserState(userId, UserState.awaiting_clone_path);
-    await ctx.reply(
-        "📁 Enter the target path for cloning:\n" +
-        `(e.g., ${process.env.AGENT_WORKSPACE || "/tmp/agent-workspace"}/my-project)`,
-        {
-            reply_markup: cancelKeyboard(),
-        }
-    );
+    await showFolderSelector(ctx, userId, "/root");
 };
 
 export const handleClonePath = async (ctx: Context) => {
-    let userId = ctx.from?.id;
-    let text = ctx.message?.text;
-
-    if (!text) return;
-
-    let userData = await getUserData(userId);
-    let data = userData?.data || {};
-    let repoUrl = data.pendingRepoUrl;
-
-    if (!repoUrl) {
-        await ctx.reply("❌ Something went wrong. Please start again.");
-        await setUserState(userId, UserState.start);
-        return;
-    }
-
-    await ctx.replyWithChatAction("typing");
-
-    let result = await cloneRepository(repoUrl, text);
-
-    if (!result.success) {
-        await ctx.reply(`❌ Clone failed:\n${result.error}`);
-        await setUserState(userId, UserState.start);
-        return;
-    }
-
-    // Get project name from repo URL
-    let repoName = repoUrl.split("/").pop()?.replace(".git", "") || "cloned-project";
-
-    // Save as project
-    let projectResult = await createProject(repoName, text, userId, `Cloned from ${repoUrl}`);
-
-    // Clean up
-    delete data.pendingRepoUrl;
-    data.activeProjectPath = text;
-    if (projectResult.data) {
-        data.activeProjectId = projectResult.data.id;
-    }
-    await setUserData(userId, data);
-
-    await setUserState(userId, UserState.start);
-    await ctx.reply(
-        `✅ Repository cloned successfully!\n\n` +
-        `📦 ${repoUrl}\n` +
-        `📁 ${text}\n\n` +
-        `${result.output}`,
-        {
-            reply_markup: adminMenuKeyboard(),
-        }
-    );
+    // Deprecated, replaced by folder selector
 };
 
 
@@ -538,6 +429,16 @@ export const projectActionHandler = async (ctx: Context) => {
             await deleteProjectHandler(ctx);
             break;
 
+        case "detach":
+            let ud3 = await getUserData(userId);
+            let d3 = ud3?.data || {};
+            d3.activeProjectPath = undefined;
+            d3.activeProjectId = undefined;
+            await setUserData(userId, d3);
+            await ctx.answerCallbackQuery({ text: "Project detached ✅" });
+            await ctx.reply("🔌 Project detached. Commands will run in default workspace.", { reply_markup: adminMenuKeyboard() });
+            break;
+
         case "cmd":
             let ud = await getUserData(userId);
             let d = ud?.data || {};
@@ -634,4 +535,217 @@ export const taskHistoryHandler = async (ctx: Context) => {
         parse_mode: "MarkdownV2",
         reply_markup: adminMenuKeyboard(),
     });
+};
+
+import { getDirectories } from "../services/agentService";
+import path from "path";
+import dbContext from "../services/dbContext";
+
+export const showFolderSelector = async (ctx: Context, userId: number, dirPath: string) => {
+    let userData = await getUserData(userId);
+    let data = userData?.data || {};
+    data.currentBrowsePath = dirPath;
+    await setUserData(userId, data);
+
+    let result = await getDirectories(dirPath);
+    if (!result.success) {
+        await ctx.reply(`❌ Failed to read directory: ${result.error}`);
+        return;
+    }
+
+    let kb = new InlineKeyboard();
+    let dirs = result.dirs || [];
+    
+    // Save dirs to state so we can reference them by index
+    data.currentDirs = dirs;
+    await setUserData(userId, data);
+
+    if (dirPath !== "/") {
+        kb.text("🔙 Parent Directory", "dir_up").row();
+    }
+    kb.text("➕ New Folder", "dir_new").row();
+    kb.text("✅ Select Current Folder", "dir_select").row();
+
+    let rowCount = 0;
+    // limit to 30 dirs to avoid keyboard size limit
+    for (let i = 0; i < Math.min(dirs.length, 30); i++) {
+        kb.text(`📁 ${dirs[i]}`, `dir_nav_${i}`);
+        rowCount++;
+        if (rowCount >= 2) {
+            kb.row();
+            rowCount = 0;
+        }
+    }
+    if (rowCount > 0) kb.row();
+
+    kb.text("❌ Cancel", "cancel_folder").row();
+
+    let msg = `📂 *Browsing:* \`${dirPath.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}\`\n\nSelect a folder, create a new one, or select the current folder.`;
+
+    if (ctx.callbackQuery) {
+        try {
+            await ctx.editMessageText(msg, { parse_mode: "MarkdownV2", reply_markup: kb });
+        } catch (e) {
+            await ctx.reply(msg, { parse_mode: "MarkdownV2", reply_markup: kb });
+        }
+    } else {
+        await ctx.reply(msg, { parse_mode: "MarkdownV2", reply_markup: kb });
+    }
+};
+
+export const folderNavHandler = async (ctx: Context, index: number) => {
+    let userId = ctx.from?.id as number;
+    let userData = await getUserData(userId);
+    let dirs = userData?.data?.currentDirs || [];
+    let currentPath = userData?.data?.currentBrowsePath || "/root";
+    
+    if (index >= 0 && index < dirs.length) {
+        let newPath = path.join(currentPath, dirs[index]);
+        await showFolderSelector(ctx, userId, newPath);
+    }
+};
+
+export const folderUpHandler = async (ctx: Context) => {
+    let userId = ctx.from?.id as number;
+    let userData = await getUserData(userId);
+    let currentPath = userData?.data?.currentBrowsePath || "/root";
+    let newPath = path.dirname(currentPath);
+    await showFolderSelector(ctx, userId, newPath);
+};
+
+export const folderNewHandler = async (ctx: Context) => {
+    let userId = ctx.from?.id as number;
+    await setUserState(userId, UserState.awaiting_new_folder_name);
+    await ctx.answerCallbackQuery();
+    await ctx.reply("📝 Enter a name for the new folder:", { reply_markup: cancelKeyboard() });
+};
+
+export const handleNewFolderName = async (ctx: Context) => {
+    let userId = ctx.from?.id as number;
+    let text = ctx.message?.text;
+    if (!text) return;
+    
+    let userData = await getUserData(userId);
+    let currentPath = userData?.data?.currentBrowsePath || "/root";
+    let newPath = path.join(currentPath, text);
+    
+    let mkdirResult = await executeCommand(`mkdir -p "${newPath}"`);
+    if (!mkdirResult.success) {
+        await ctx.reply(`❌ Failed to create directory: ${mkdirResult.error}`);
+        return;
+    }
+    
+    await setUserState(userId, UserState.start);
+    await showFolderSelector(ctx, userId, newPath);
+};
+
+export const folderSelectHandler = async (ctx: Context) => {
+    let userId = ctx.from?.id as number;
+    let userData = await getUserData(userId);
+    let data = userData?.data || {};
+    let currentPath = data.currentBrowsePath || "/root";
+    let operation = data.pendingOperation;
+    
+    await ctx.answerCallbackQuery();
+    
+    if (operation === "new") {
+        let projectName = data.pendingProjectName;
+        if (!projectName) return ctx.reply("❌ Missing project name.");
+        
+        let result = await createProject(projectName, currentPath, userId);
+        if (!result.success) {
+            return ctx.reply(`❌ ${result.message}`);
+        }
+        
+        delete data.pendingProjectName;
+        data.activeProjectPath = currentPath;
+        data.activeProjectId = result.data?.id;
+        await setUserData(userId, data);
+        await setUserState(userId, UserState.start);
+        
+        await ctx.reply(`✅ Project *${projectName.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}* created\\!\n📁 Path: \`${currentPath}\``, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
+    } else if (operation === "clone") {
+        let repoUrl = data.pendingRepoUrl;
+        if (!repoUrl) return ctx.reply("❌ Missing repo URL.");
+        
+        await ctx.replyWithChatAction("typing");
+        let result = await cloneRepository(repoUrl, currentPath);
+        if (!result.success) {
+            await setUserState(userId, UserState.start);
+            return ctx.reply(`❌ Clone failed:\n${result.error}`);
+        }
+        
+        let repoName = repoUrl.split("/").pop()?.replace(".git", "") || "cloned-project";
+        let projectResult = await createProject(repoName, currentPath, userId, `Cloned from ${repoUrl}`);
+        
+        delete data.pendingRepoUrl;
+        data.activeProjectPath = currentPath;
+        if (projectResult.data) {
+            data.activeProjectId = projectResult.data.id;
+        }
+        await setUserData(userId, data);
+        await setUserState(userId, UserState.start);
+        
+        await ctx.reply(`✅ Repository cloned successfully!\n📦 ${repoUrl}\n📁 ${currentPath}`, { reply_markup: adminMenuKeyboard() });
+    }
+};
+
+export const modelSelectionHandler = async (ctx: Context) => {
+    let kb = new InlineKeyboard();
+    let models = [
+        "Gemini 3.5 Flash (Medium)",
+        "Gemini 3.5 Flash (High)",
+        "Gemini 3.5 Flash (Low)",
+        "Gemini 3.1 Pro (Low)",
+        "Gemini 3.1 Pro (High)",
+        "Claude Sonnet 4.6 (Thinking)",
+        "Claude Opus 4.6 (Thinking)",
+        "GPT-OSS 120B (Medium)"
+    ];
+    
+    for (let i = 0; i < models.length; i++) {
+        kb.text(models[i], `model_select_${i}`).row();
+    }
+    
+    await ctx.reply("🤖 Select an AI model to use:", { reply_markup: kb });
+};
+
+export const selectModelHandler = async (ctx: Context, index: number) => {
+    let userId = ctx.from?.id as number;
+    let models = [
+        "Gemini 3.5 Flash (Medium)",
+        "Gemini 3.5 Flash (High)",
+        "Gemini 3.5 Flash (Low)",
+        "Gemini 3.1 Pro (Low)",
+        "Gemini 3.1 Pro (High)",
+        "Claude Sonnet 4.6 (Thinking)",
+        "Claude Opus 4.6 (Thinking)",
+        "GPT-OSS 120B (Medium)"
+    ];
+    
+    if (index >= 0 && index < models.length) {
+        let selectedModel = models[index];
+        let userData = await getUserData(userId);
+        let data = userData?.data || {};
+        data.selectedModel = selectedModel;
+        await setUserData(userId, data);
+        
+        await ctx.answerCallbackQuery({ text: `Model set to ${selectedModel} ✅` });
+        await ctx.reply(`🤖 Model updated to: *${selectedModel}*`, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
+    }
+};
+
+export const usageStatsHandler = async (ctx: Context) => {
+    let userId = ctx.from?.id as number;
+    let projectsCount = await dbContext.project.count({ where: { createdBy: userId } });
+    let tasksCount = await dbContext.agentTask.count({ where: { userId } });
+    let messagesCount = await dbContext.conversation.count({ where: { userId } });
+    
+    let msg = `📊 *Usage Quota Stats*\n\n`;
+    msg += `📂 Projects Created: ${projectsCount}\n`;
+    msg += `📋 Tasks Executed: ${tasksCount}\n`;
+    msg += `💬 Chat Messages: ${messagesCount}\n\n`;
+    msg += `_Note: Currently, there are no strict quota limits applied to your account._`;
+    
+    await ctx.reply(msg, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
 };
