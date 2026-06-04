@@ -107,6 +107,10 @@ export const chatMessageHandler = async (ctx: Context) => {
         } catch (e) {
             await ctx.reply(response);
         }
+        
+        await ctx.reply(`✅ Agent has completed the task. You can now send messages.`, {
+            reply_markup: chatMenuKeyboard(),
+        });
         return;
     }
 
@@ -114,15 +118,16 @@ export const chatMessageHandler = async (ctx: Context) => {
     await addMessage(userId, "assistant", result.output);
 
     try {
-        await ctx.api.editMessageText(ctx.chat!.id, messageToEdit.message_id, `🤖 ${result.output}`, {
-            reply_markup: chatMenuKeyboard(),
-        });
+        let finalMessage = result.output.length > 4000 ? result.output.substring(result.output.length - 4000) : result.output;
+        await ctx.api.editMessageText(ctx.chat!.id, messageToEdit.message_id, `🤖 ${finalMessage}`);
     } catch (e) {
-        // If edit fails, just reply anew
-        await ctx.reply(`🤖 ${result.output}`, {
-            reply_markup: chatMenuKeyboard(),
-        });
+        // If edit fails, ignore
     }
+
+    // Always send the completion message
+    await ctx.reply(`✅ Agent has completed the task. You can now send messages.`, {
+        reply_markup: chatMenuKeyboard(),
+    });
 };
 
 export const clearChatHandler = async (ctx: Context) => {

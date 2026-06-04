@@ -10,7 +10,7 @@ const MAX_OUTPUT_LENGTH = 4000; // Telegram message limit
 
 const truncateOutput = (output: string): string => {
     if (output.length <= MAX_OUTPUT_LENGTH) return output;
-    return output.substring(0, MAX_OUTPUT_LENGTH) + "\n\n... (output truncated)";
+    return "... (output truncated)\n\n" + output.substring(output.length - MAX_OUTPUT_LENGTH);
 };
 
 export const executeCommand = async (command: string, cwd?: string): Promise<{ success: boolean; output: string; error?: string }> => {
@@ -172,7 +172,7 @@ export const runAgyCli = async (prompt: string, cwd?: string, model?: string, on
                                         let updates = "";
                                         if (obj.tool_calls && obj.tool_calls.length > 0) {
                                             for (let tc of obj.tool_calls) {
-                                                updates += `\n[Tool] Executed ${tc.tool_name}`;
+                                                updates += `\n[Tool] Executed ${tc.name}`;
                                             }
                                         }
                                         if (updates) onProgress(updates + "\n");
