@@ -3,8 +3,29 @@ import { promisify } from "util";
 import logger from "../core/logger";
 import path from "path";
 import fs from "fs";
+import dotenv from "dotenv";
 
 const execAsync = promisify(exec);
+
+const getCleanEnv = () => {
+    let cleanEnv = { ...process.env };
+    
+    try {
+        let envPath = path.resolve(process.cwd(), ".env");
+        if (fs.existsSync(envPath)) {
+            let envContent = fs.readFileSync(envPath, "utf-8");
+            let envConfig = dotenv.parse(envContent);
+            for (let key in envConfig) {
+                delete cleanEnv[key];
+            }
+        }
+    } catch (e) {
+        // Ignore errors reading .env
+    }
+    
+    cleanEnv.PATH = process.env.PATH;
+    return cleanEnv;
+};
 
 const MAX_OUTPUT_LENGTH = 4000; // Telegram message limit
 
@@ -30,7 +51,7 @@ export const executeCommand = async (command: string, cwd?: string): Promise<{ s
             cwd: workDir,
             timeout: 120000, // 2 minute timeout
             maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-            env: { ...process.env, PATH: process.env.PATH },
+            env: getCleanEnv(),
         });
 
         let output = stdout || "";
@@ -70,6 +91,7 @@ export const cloneRepository = async (repoUrl: string, targetPath: string): Prom
         let { stdout, stderr } = await execAsync(`git clone ${repoUrl} ${targetPath}`, {
             timeout: 300000, // 5 minute timeout for cloning
             maxBuffer: 1024 * 1024 * 10,
+            env: getCleanEnv(),
         });
 
         return {
@@ -115,7 +137,7 @@ export const runAgyCli = async (prompt: string, cwd?: string, model?: string, on
         return await new Promise((resolve) => {
             let child = spawn("agy", args, {
                 cwd: workDir,
-                env: { ...process.env, PATH: process.env.PATH },
+                env: getCleanEnv(),
             });
 
             let stdout = "";
@@ -289,10 +311,10 @@ export const getDirectories = async (dirPath: string): Promise<{ success: boolea
 export const getSystemInfo = async (): Promise<string> => {
     try {
         let [nodeVersion, npmVersion, gitVersion, agyVersion] = await Promise.allSettled([
-            execAsync("node --version"),
-            execAsync("npm --version"),
-            execAsync("git --version"),
-            execAsync("agy --version"),
+            execAsync("node --version", { env: getCleanEnv() }),
+            execAsync("npm --version", { env: getCleanEnv() }),
+            execAsync("git --version", { env: getCleanEnv() }),
+            execAsync("agy --version", { env: getCleanEnv() }),
         ]);
 
         let info = "🖥️ System Information:\n\n";
