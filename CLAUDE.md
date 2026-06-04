@@ -77,3 +77,38 @@ The project is built with **TypeScript**, **grammy** (for the Telegram bot), and
 - **Markdown:** Telegram requires strict escaping for `MarkdownV2`. Be very careful when sending dynamic content (like file paths or command outputs) inside Markdown blocks.
 - **State Management:** When expecting follow-up input from a user, update their `UserState` in the database, and handle that state in `generalHandlers.ts`. Revert to `UserState.start` when the flow completes or cancels.
 - **CLI Execution:** When running shell commands on behalf of the user, respect the `AGENT_WORKSPACE` environment variable as the root boundary.
+
+---
+
+## 🤖 AI Agent Rules: RTK - Rust Token Killer (Google Antigravity)
+
+**Usage**: Token-optimized CLI proxy for shell commands.
+
+### Rule
+
+Always prefix shell commands with `rtk` to minimize token consumption.
+
+Examples:
+
+```bash
+rtk git status
+rtk cargo test
+rtk ls src/
+rtk grep "pattern" src/
+rtk find "*.rs" .
+rtk docker ps
+rtk gh pr list
+```
+
+### Meta Commands
+
+```bash
+rtk gain              # Show token savings
+rtk gain --history    # Command history with savings
+rtk discover          # Find missed RTK opportunities
+rtk proxy <cmd>       # Run raw (no filtering, for debugging)
+```
+
+### Why
+
+RTK filters and compresses command output before it reaches the LLM context, saving 60-90% tokens on common operations. Always use `rtk <cmd>` instead of raw commands.
