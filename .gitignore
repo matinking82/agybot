@@ -1,0 +1,12 @@
+node_modules/
+projects/
+.devcontainer/
+Sources/
+.env
+prisma/migrations/
+log.txt
+logs.log
+generated/
+dist/
+swagger-output.json
+swagger-output.json

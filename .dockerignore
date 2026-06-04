@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Generated files
+generated/
+swagger-output.json
+
+# Environment files (will be passed via docker-compose)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+log.txt
+logs.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (not needed in image)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Development files
+*.md
+.devcontainer/
+projects/
+Sources/
+
+# Test files
+coverage/
+.nyc_output/
+
+# Prisma migrations (handled separately)
+prisma/migrations/
