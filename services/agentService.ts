@@ -92,6 +92,12 @@ export const cloneRepository = async (repoUrl: string, targetPath: string): Prom
 export const runAgyCli = async (prompt: string, cwd?: string, model?: string, onProgress?: (chunk: string) => void): Promise<{ success: boolean; output: string; error?: string }> => {
     try {
         let workDir = cwd || process.env.AGENT_WORKSPACE || "/tmp/agent-workspace";
+        let brainDir = require('os').homedir() + "/.gemini/antigravity-cli/brain";
+        
+        let existingDirs = new Set<string>();
+        if (fs.existsSync(brainDir)) {
+            existingDirs = new Set(fs.readdirSync(brainDir));
+        }
 
         if (!fs.existsSync(workDir)) {
             fs.mkdirSync(workDir, { recursive: true });
@@ -127,7 +133,61 @@ export const runAgyCli = async (prompt: string, cwd?: string, model?: string, on
                 stderr += data.toString();
             });
 
+            let transcriptInterval: NodeJS.Timeout;
+            let checkDirInterval: NodeJS.Timeout;
+            let transcriptPath = "";
+            let readPosition = 0;
+
+            checkDirInterval = setInterval(() => {
+                if (!transcriptPath && fs.existsSync(brainDir)) {
+                    let currentDirs = fs.readdirSync(brainDir);
+                    for (let d of currentDirs) {
+                        if (!existingDirs.has(d)) {
+                            let p = brainDir + "/" + d + "/.system_generated/logs/transcript.jsonl";
+                            if (fs.existsSync(p)) {
+                                transcriptPath = p;
+                                clearInterval(checkDirInterval);
+                            }
+                        }
+                    }
+                }
+            }, 500);
+
+            transcriptInterval = setInterval(() => {
+                if (transcriptPath && fs.existsSync(transcriptPath)) {
+                    try {
+                        let fd = fs.openSync(transcriptPath, 'r');
+                        let stats = fs.fstatSync(fd);
+                        if (stats.size > readPosition) {
+                            let buffer = Buffer.alloc(stats.size - readPosition);
+                            fs.readSync(fd, buffer, 0, buffer.length, readPosition);
+                            readPosition = stats.size;
+                            
+                            let lines = buffer.toString().split('\n');
+                            for (let line of lines) {
+                                if (!line.trim()) continue;
+                                try {
+                                    let obj = JSON.parse(line);
+                                    if (obj.type === "PLANNER_RESPONSE" && onProgress) {
+                                        let updates = "";
+                                        if (obj.tool_calls && obj.tool_calls.length > 0) {
+                                            for (let tc of obj.tool_calls) {
+                                                updates += `\n[Tool] Executed ${tc.tool_name}`;
+                                            }
+                                        }
+                                        if (updates) onProgress(updates + "\n");
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                        fs.closeSync(fd);
+                    } catch (e) {}
+                }
+            }, 1000);
+
             child.on("error", (error: any) => {
+                clearInterval(checkDirInterval);
+                clearInterval(transcriptInterval);
                 logger.error(error, { section: "runAgyCli" });
                 if (error.message?.includes("ENOENT")) {
                     resolve({
@@ -145,6 +205,8 @@ export const runAgyCli = async (prompt: string, cwd?: string, model?: string, on
             });
 
             child.on("close", (code) => {
+                clearInterval(checkDirInterval);
+                clearInterval(transcriptInterval);
                 let output = stdout || stderr || "No output from agy";
                 resolve({
                     success: code === 0,

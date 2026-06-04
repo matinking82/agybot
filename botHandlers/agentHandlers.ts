@@ -780,7 +780,32 @@ export const usageStatsHandler = async (ctx: Context) => {
     msg += `📂 Projects Created: ${projectsCount}\n`;
     msg += `📋 Tasks Executed: ${tasksCount}\n`;
     msg += `💬 Chat Messages: ${messagesCount}\n\n`;
-    msg += `_Note: Currently, there are no strict quota limits applied to your account\\._`;
+
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setHours(24, 0, 0, 0); // Use local timezone for reset
+    const diffMs = tomorrow.getTime() - now.getTime();
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const resetTimeString = `${hours}h ${minutes}m`;
+
+    let models = [
+        { name: "Gemini 3.5 Flash (Medium)", quota: "Unlimited" },
+        { name: "Gemini 3.5 Flash (High)", quota: "Unlimited" },
+        { name: "Gemini 3.5 Flash (Low)", quota: "Unlimited" },
+        { name: "Gemini 3.1 Pro (Low)", quota: "Unlimited" },
+        { name: "Gemini 3.1 Pro (High)", quota: "50/50" },
+        { name: "Claude Sonnet 4.6 (Thinking)", quota: "50/50" },
+        { name: "Claude Opus 4.6 (Thinking)", quota: "20/20" },
+        { name: "GPT-OSS 120B (Medium)", quota: "Unlimited" }
+    ];
+
+    msg += `🤖 *Model Quotas*\n`;
+    for (let model of models) {
+        msg += `• *${model.name.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}*: ${model.quota} \\(Resets in ${resetTimeString}\\)\n`;
+    }
+
+    msg += `\n_Note: Currently, there are no strict quota limits applied to your account\\._`;
     
     await ctx.reply(msg, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
 };
