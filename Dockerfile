@@ -26,6 +26,9 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
+# Install git for repository cloning
+RUN apk add --no-cache git
+
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -42,12 +45,8 @@ COPY --from=builder /app/generated ./generated
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
-# Expose the application port
-EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+# Create agent workspace directory
+RUN mkdir -p /tmp/agent-workspace
 
 # Start the application with entrypoint
 ENTRYPOINT ["./docker-entrypoint.sh"]

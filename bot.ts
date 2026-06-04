@@ -54,7 +54,33 @@ bot.command("logout", async (ctx) => {
             }); 
         }
     });
-})
+});
+
+bot.command("help", async (ctx) => {
+    new Promise(async () => {
+        try {
+            await ctx.reply(
+                "🤖 *Antigravity Agent Bot*\n\n" +
+                "*Commands:*\n" +
+                "/start \\- Start the bot\n" +
+                "/login \\<username\\> \\<password\\> \\- Login as admin\n" +
+                "/logout \\- Logout from admin\n" +
+                "/help \\- Show this message\n\n" +
+                "*Agent Features \\(Admin only\\):*\n" +
+                "💬 Chat with Agent \\- AI\\-powered conversations\n" +
+                "📂 Projects \\- Create and manage projects\n" +
+                "⚡ Execute Command \\- Run shell commands\n" +
+                "🖥️ System Info \\- View system details\n" +
+                "📋 Task History \\- View past tasks",
+                { parse_mode: "MarkdownV2" }
+            );
+        } catch (error) {
+            logger.error(error, {
+                section: "helpHandler",
+            });
+        }
+    });
+});
 
 bot.on("message", (ctx) => {
     new Promise(async () => {

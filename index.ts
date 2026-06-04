@@ -2,17 +2,18 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import bot from "./bot";
-import app from "./server";
+import { initializeAdmin } from "./services/adminDbServices";
+import logger from "./core/logger";
 
-
-const PORT = process.env.PORT || 8080;
 
 (async () => {
-    app.listen(PORT, () => {
-        console.log(`Server listening on port ${PORT}`);
-    });
+    // Initialize admin account
+    let adminResult = await initializeAdmin();
+    logger.info(adminResult.message, { section: "init" });
 
+    // Start bot
     await bot.init();
-    console.log("Bot with username @" + bot.botInfo.username + " is running");
+    console.log("🤖 Bot with username @" + bot.botInfo.username + " is running");
+    console.log("📂 Agent workspace: " + (process.env.AGENT_WORKSPACE || "/tmp/agent-workspace"));
     await bot.start();
 })();

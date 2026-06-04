@@ -18,9 +18,46 @@ model admin {
 }
 
 model User {
-  Id      BigInt  @id //telegram id
-  data    Json?
-  state   String?
-  isAdmin Boolean @default(false)
+  Id        BigInt   @id //telegram id
+  data      Json?
+  state     String?
+  isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+model Conversation {
+  id        Int      @id @default(autoincrement())
+  userId    BigInt
+  role      String   // 'user' or 'assistant'
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Project {
+  id          Int      @id @default(autoincrement())
+  name        String
+  path        String
+  description String?  @db.Text
+  createdBy   BigInt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdBy])
+}
+
+model AgentTask {
+  id          Int      @id @default(autoincrement())
+  userId      BigInt
+  projectId   Int?
+  command     String   @db.Text
+  status      String   @default("pending") // pending, running, completed, failed
+  output      String?  @db.LongText
+  error       String?  @db.Text
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([userId])
+  @@index([projectId])
 }

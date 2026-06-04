@@ -1,7 +1,7 @@
 services:
   db:
     image: mariadb:11
-    container_name: basebot-db
+    container_name: agent-bot-db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
@@ -19,29 +19,30 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - basebot-network
+      - agent-bot-network
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: basebot-app
+    container_name: agent-bot-app
     restart: unless-stopped
     env_file:
       - .env
     environment:
       DATABASE_URL: mysql://${DB_USER:-basebot}:${DB_PASSWORD:-root}@db:3306/${DB_NAME:-mydb}
-    ports:
-      - "${PORT:-8080}:8080"
+    volumes:
+      - agent_workspace:/tmp/agent-workspace
     depends_on:
       db:
         condition: service_healthy
     networks:
-      - basebot-network
+      - agent-bot-network
 
 volumes:
   db_data:
+  agent_workspace:
 
 networks:
-  basebot-network:
+  agent-bot-network:
     driver: bridge
