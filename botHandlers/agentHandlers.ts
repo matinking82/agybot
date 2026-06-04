@@ -182,7 +182,7 @@ export const listProjectsHandler = async (ctx: Context) => {
     let kb = new InlineKeyboard();
 
     for (let project of result.data) {
-        message += `• *${project.name.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}*\n  📁 \`${project.path}\`\n\n`;
+        message += `• *${project.name.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}*\n  📁 \`${project.path.replace(/[\\`]/g, '\\$&')}\`\n\n`;
         kb.text(`📂 ${project.name}`, `project_select_${project.id}`).row();
     }
 
@@ -223,9 +223,9 @@ export const selectProjectHandler = async (ctx: Context) => {
     await ctx.answerCallbackQuery();
     await ctx.reply(
         `📂 *${result.data.name.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}*\n\n` +
-        `📁 Path: \`${result.data.path}\`\n` +
-        `📅 Created: ${result.data.createdAt.toLocaleDateString()}\n\n` +
-        `📋 *Contents:*\n\`\`\`\n${listing.success ? listing.output : "Could not list directory"}\n\`\`\``,
+        `📁 Path: \`${result.data.path.replace(/[\\`]/g, '\\$&')}\`\n` +
+        `📅 Created: ${result.data.createdAt.toLocaleDateString().replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}\n\n` +
+        `📋 *Contents:*\n\`\`\`\n${(listing.success ? listing.output : "Could not list directory").replace(/[\\`]/g, '\\$&')}\n\`\`\``,
         {
             parse_mode: "MarkdownV2",
             reply_markup: projectActionsKeyboard(projectId),
@@ -325,9 +325,9 @@ export const executeCommandHandler = async (ctx: Context) => {
     let message = "⚡ *Execute Command*\n\n";
     message += "Send me a shell command to execute\\.\n";
     if (activeProject) {
-        message += `\n📂 Active project: \`${activeProject}\``;
+        message += `\n📂 Active project: \`${activeProject.replace(/[\\`]/g, '\\$&')}\``;
     } else {
-        message += `\n📂 Working directory: \`${(process.env.AGENT_WORKSPACE || "/tmp/agent-workspace").replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}\``;
+        message += `\n📂 Working directory: \`${(process.env.AGENT_WORKSPACE || "/tmp/agent-workspace").replace(/[\\`]/g, '\\$&')}\``;
     }
 
     await ctx.reply(message, {
@@ -368,7 +368,7 @@ export const handleCommandExecution = async (ctx: Context) => {
     if (result.success) {
         await ctx.reply(
             `✅ *Command executed*\n\n` +
-            `\`\`\`\n${result.output}\n\`\`\``,
+            `\`\`\`\n${result.output.replace(/[\\`]/g, '\\$&')}\n\`\`\``,
             {
                 parse_mode: "MarkdownV2",
             }
@@ -376,7 +376,7 @@ export const handleCommandExecution = async (ctx: Context) => {
     } else {
         await ctx.reply(
             `❌ *Command failed*\n\n` +
-            `\`\`\`\n${result.error}\n\`\`\``,
+            `\`\`\`\n${(result.error || "").replace(/[\\`]/g, '\\$&')}\n\`\`\``,
             {
                 parse_mode: "MarkdownV2",
             }
@@ -416,7 +416,7 @@ export const projectActionHandler = async (ctx: Context) => {
             await ctx.answerCallbackQuery({ text: "Project activated ✅" });
             await ctx.reply(
                 `📂 Active project set to: *${project.data.name.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}*\n` +
-                `📁 Path: \`${project.data.path}\`\n\n` +
+                `📁 Path: \`${project.data.path.replace(/[\\`]/g, '\\$&')}\`\n\n` +
                 "All commands will now execute in this project directory\\.",
                 {
                     parse_mode: "MarkdownV2",
@@ -527,8 +527,11 @@ export const taskHistoryHandler = async (ctx: Context) => {
 
     for (let task of result.data) {
         let statusIcon = task.status === "completed" ? "✅" : task.status === "failed" ? "❌" : task.status === "running" ? "⏳" : "📝";
-        message += `${statusIcon} \`${task.command.substring(0, 50)}\`\n`;
-        message += `   Status: ${task.status} | ${task.createdAt.toLocaleString()}\n\n`;
+        let escapedCmd = task.command.substring(0, 50).replace(/[\\`]/g, '\\$&');
+        let escapedStatus = task.status.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+        let escapedDate = task.createdAt.toLocaleString().replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+        message += `${statusIcon} \`${escapedCmd}\`\n`;
+        message += `   Status: ${escapedStatus} \\| ${escapedDate}\n\n`;
     }
 
     await ctx.reply(message, {
@@ -580,7 +583,7 @@ export const showFolderSelector = async (ctx: Context, userId: number, dirPath: 
 
     kb.text("❌ Cancel", "cancel_folder").row();
 
-    let msg = `📂 *Browsing:* \`${dirPath.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}\`\n\nSelect a folder, create a new one, or select the current folder.`;
+    let msg = `📂 *Browsing:* \`${dirPath.replace(/[\\`]/g, '\\$&')}\`\n\nSelect a folder, create a new one, or select the current folder\\.`;
 
     if (ctx.callbackQuery) {
         try {
@@ -663,7 +666,7 @@ export const folderSelectHandler = async (ctx: Context) => {
         await setUserData(userId, data);
         await setUserState(userId, UserState.start);
         
-        await ctx.reply(`✅ Project *${projectName.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}* created\\!\n📁 Path: \`${currentPath}\``, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
+        await ctx.reply(`✅ Project *${projectName.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}* created\\!\n📁 Path: \`${currentPath.replace(/[\\`]/g, '\\$&')}\``, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
     } else if (operation === "clone") {
         let repoUrl = data.pendingRepoUrl;
         if (!repoUrl) return ctx.reply("❌ Missing repo URL.");
@@ -686,7 +689,7 @@ export const folderSelectHandler = async (ctx: Context) => {
         await setUserData(userId, data);
         await setUserState(userId, UserState.start);
         
-        await ctx.reply(`✅ Repository cloned successfully!\n📦 ${repoUrl}\n📁 ${currentPath}`, { reply_markup: adminMenuKeyboard() });
+        await ctx.reply(`✅ Repository cloned successfully\\!\n📦 ${repoUrl.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}\n📁 ${currentPath.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}`, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
     }
 };
 
@@ -731,7 +734,7 @@ export const selectModelHandler = async (ctx: Context, index: number) => {
         await setUserData(userId, data);
         
         await ctx.answerCallbackQuery({ text: `Model set to ${selectedModel} ✅` });
-        await ctx.reply(`🤖 Model updated to: *${selectedModel}*`, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
+        await ctx.reply(`🤖 Model updated to: *${selectedModel.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}*`, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
     }
 };
 
@@ -745,7 +748,7 @@ export const usageStatsHandler = async (ctx: Context) => {
     msg += `📂 Projects Created: ${projectsCount}\n`;
     msg += `📋 Tasks Executed: ${tasksCount}\n`;
     msg += `💬 Chat Messages: ${messagesCount}\n\n`;
-    msg += `_Note: Currently, there are no strict quota limits applied to your account._`;
+    msg += `_Note: Currently, there are no strict quota limits applied to your account\\._`;
     
     await ctx.reply(msg, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
 };
