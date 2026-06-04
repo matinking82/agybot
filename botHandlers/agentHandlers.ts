@@ -49,7 +49,12 @@ export const chatMessageHandler = async (ctx: Context) => {
     // Save user message to conversation history
     await addMessage(userId, "user", text);
 
-    // Show typing indicator
+    // Show typing indicator and react
+    try {
+        await ctx.react("🤔");
+    } catch (e) {
+        // Ignored if reactions are not allowed or library version doesn't support it
+    }
     await ctx.replyWithChatAction("typing");
 
     // Get conversation history for context
@@ -70,7 +75,23 @@ export const chatMessageHandler = async (ctx: Context) => {
     let prompt = contextMessages ? `Previous conversation:\n${contextMessages}\n\nUser: ${text}` : text;
 
     // Try to use agy CLI first, fall back to direct command execution
-    let result = await runAgyCli(prompt, activeProjectPath, userData?.data?.selectedModel);
+    let messageToEdit = await ctx.reply("🤖 Thinking...");
+    
+    let lastEditTime = 0;
+    let result = await runAgyCli(prompt, activeProjectPath, userData?.data?.selectedModel, async (chunk) => {
+        let now = Date.now();
+        if (now - lastEditTime > 1500) {
+            lastEditTime = now;
+            try {
+                let trimmed = chunk.length > 4000 ? chunk.substring(chunk.length - 4000) : chunk;
+                if (trimmed.trim()) {
+                    await ctx.api.editMessageText(ctx.chat!.id, messageToEdit.message_id, `🤖 ${trimmed}`);
+                }
+            } catch (e) {
+                // Ignore edit errors (e.g. message not modified)
+            }
+        }
+    });
 
     if (!result.success) {
         // Fallback: if agy is not available, provide helpful response
@@ -81,16 +102,27 @@ export const chatMessageHandler = async (ctx: Context) => {
         response += `• 📂 Projects - to manage your projects\n`;
 
         await addMessage(userId, "assistant", response);
-        await ctx.reply(response);
+        try {
+            await ctx.api.editMessageText(ctx.chat!.id, messageToEdit.message_id, response);
+        } catch (e) {
+            await ctx.reply(response);
+        }
         return;
     }
 
     // Save assistant response
     await addMessage(userId, "assistant", result.output);
 
-    await ctx.reply(`🤖 ${result.output}`, {
-        reply_markup: chatMenuKeyboard(),
-    });
+    try {
+        await ctx.api.editMessageText(ctx.chat!.id, messageToEdit.message_id, `🤖 ${result.output}`, {
+            reply_markup: chatMenuKeyboard(),
+        });
+    } catch (e) {
+        // If edit fails, just reply anew
+        await ctx.reply(`🤖 ${result.output}`, {
+            reply_markup: chatMenuKeyboard(),
+        });
+    }
 };
 
 export const clearChatHandler = async (ctx: Context) => {

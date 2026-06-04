@@ -89,7 +89,7 @@ export const cloneRepository = async (repoUrl: string, targetPath: string): Prom
     }
 };
 
-export const runAgyCli = async (prompt: string, cwd?: string, model?: string): Promise<{ success: boolean; output: string; error?: string }> => {
+export const runAgyCli = async (prompt: string, cwd?: string, model?: string, onProgress?: (chunk: string) => void): Promise<{ success: boolean; output: string; error?: string }> => {
     try {
         let workDir = cwd || process.env.AGENT_WORKSPACE || "/tmp/agent-workspace";
 
@@ -101,28 +101,60 @@ export const runAgyCli = async (prompt: string, cwd?: string, model?: string): P
             section: "runAgyCli",
         });
 
-        let cmd = `echo ${JSON.stringify(prompt)} | agy --prompt -`;
+        let args = ["--prompt", "-"];
         if (model) {
-            cmd = `echo ${JSON.stringify(prompt)} | agy --prompt - --model ${JSON.stringify(model)}`;
+            args.push("--model", model);
         }
 
-        // Run agy with the prompt via stdin using --prompt flag
-        let { stdout, stderr } = await execAsync(
-            cmd,
-            {
+        return await new Promise((resolve) => {
+            let child = spawn("agy", args, {
                 cwd: workDir,
-                timeout: 300000, // 5 minute timeout
-                maxBuffer: 1024 * 1024 * 10,
                 env: { ...process.env, PATH: process.env.PATH },
-            }
-        );
+            });
 
-        let output = stdout || stderr || "No output from agy";
+            let stdout = "";
+            let stderr = "";
 
-        return {
-            success: true,
-            output: truncateOutput(output.trim()),
-        };
+            child.stdout.on("data", (data) => {
+                let chunk = data.toString();
+                stdout += chunk;
+                if (onProgress) {
+                    onProgress(stdout);
+                }
+            });
+
+            child.stderr.on("data", (data) => {
+                stderr += data.toString();
+            });
+
+            child.on("error", (error: any) => {
+                logger.error(error, { section: "runAgyCli" });
+                if (error.message?.includes("ENOENT")) {
+                    resolve({
+                        success: false,
+                        output: "",
+                        error: "agy CLI not found. Please install it: curl -fsSL https://antigravity.google/cli/install.sh | bash",
+                    });
+                } else {
+                    resolve({
+                        success: false,
+                        output: "",
+                        error: truncateOutput(error.message || "Failed to run agy CLI"),
+                    });
+                }
+            });
+
+            child.on("close", (code) => {
+                let output = stdout || stderr || "No output from agy";
+                resolve({
+                    success: code === 0,
+                    output: truncateOutput(output.trim()),
+                });
+            });
+
+            child.stdin.write(prompt);
+            child.stdin.end();
+        });
     } catch (error: any) {
         logger.error(error, {
             section: "runAgyCli",

@@ -71,7 +71,10 @@ bot.command("help", async (ctx) => {
                 "📂 Projects \\- Create and manage projects\n" +
                 "⚡ Execute Command \\- Run shell commands\n" +
                 "🖥️ System Info \\- View system details\n" +
-                "📋 Task History \\- View past tasks",
+                "📋 Task History \\- View past tasks\n\n" +
+                "*New Telegram Features:*\n" +
+                "🤖 *Bot\\-to\\-Bot Communication*: Enable in @BotFather to let this bot interact with other bots\\.\n" +
+                "🌐 *Guest AI Bots*: Add this bot to any group chat to assist you there\\.",
                 { parse_mode: "MarkdownV2" }
             );
         } catch (error) {

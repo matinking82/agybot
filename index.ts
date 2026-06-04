@@ -13,6 +13,15 @@ import logger from "./core/logger";
 
     // Start bot
     await bot.init();
+    
+    // Set bot commands
+    await bot.api.setMyCommands([
+        { command: "start", description: "Start the bot" },
+        { command: "login", description: "Login as admin" },
+        { command: "logout", description: "Logout from admin" },
+        { command: "help", description: "Show help message" },
+    ]);
+
     console.log("🤖 Bot with username @" + bot.botInfo.username + " is running");
     console.log("📂 Agent workspace: " + (process.env.AGENT_WORKSPACE || "/tmp/agent-workspace"));
     await bot.start();
