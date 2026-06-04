@@ -111,7 +111,7 @@ export const cloneRepository = async (repoUrl: string, targetPath: string): Prom
     }
 };
 
-export const runAgyCli = async (prompt: string, cwd?: string, model?: string, onProgress?: (chunk: string) => void): Promise<{ success: boolean; output: string; error?: string }> => {
+export const runAgyCli = async (prompt: string, cwd?: string, model?: string, conversationId?: string, onProgress?: (chunk: string) => void): Promise<{ success: boolean; output: string; error?: string; conversationId?: string }> => {
     try {
         let workDir = cwd || process.env.AGENT_WORKSPACE || "/tmp/agent-workspace";
         let brainDir = require('os').homedir() + "/.gemini/antigravity-cli/brain";
@@ -132,6 +132,9 @@ export const runAgyCli = async (prompt: string, cwd?: string, model?: string, on
         let args = ["--prompt", "-"];
         if (model) {
             args.push("--model", model);
+        }
+        if (conversationId) {
+            args.push("--conversation", conversationId);
         }
 
         return await new Promise((resolve) => {
@@ -156,24 +159,30 @@ export const runAgyCli = async (prompt: string, cwd?: string, model?: string, on
             });
 
             let transcriptInterval: NodeJS.Timeout;
-            let checkDirInterval: NodeJS.Timeout;
+            let checkDirInterval: NodeJS.Timeout | undefined;
             let transcriptPath = "";
             let readPosition = 0;
+            let discoveredConversationId = conversationId;
 
-            checkDirInterval = setInterval(() => {
-                if (!transcriptPath && fs.existsSync(brainDir)) {
-                    let currentDirs = fs.readdirSync(brainDir);
-                    for (let d of currentDirs) {
-                        if (!existingDirs.has(d)) {
-                            let p = brainDir + "/" + d + "/.system_generated/logs/transcript.jsonl";
-                            if (fs.existsSync(p)) {
-                                transcriptPath = p;
-                                clearInterval(checkDirInterval);
+            if (conversationId) {
+                transcriptPath = brainDir + "/" + conversationId + "/.system_generated/logs/transcript.jsonl";
+            } else {
+                checkDirInterval = setInterval(() => {
+                    if (!transcriptPath && fs.existsSync(brainDir)) {
+                        let currentDirs = fs.readdirSync(brainDir);
+                        for (let d of currentDirs) {
+                            if (!existingDirs.has(d)) {
+                                let p = brainDir + "/" + d + "/.system_generated/logs/transcript.jsonl";
+                                if (fs.existsSync(p)) {
+                                    transcriptPath = p;
+                                    discoveredConversationId = d;
+                                    clearInterval(checkDirInterval);
+                                }
                             }
                         }
                     }
-                }
-            }, 500);
+                }, 500);
+            }
 
             transcriptInterval = setInterval(() => {
                 if (transcriptPath && fs.existsSync(transcriptPath)) {
@@ -233,6 +242,7 @@ export const runAgyCli = async (prompt: string, cwd?: string, model?: string, on
                 resolve({
                     success: code === 0,
                     output: truncateOutput(output.trim()),
+                    conversationId: discoveredConversationId
                 });
             });
 

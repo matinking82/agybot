@@ -57,33 +57,29 @@ export const chatMessageHandler = async (ctx: Context) => {
     }
     await ctx.replyWithChatAction("typing");
 
-    // Get conversation history for context
-    let history = await getConversationHistory(userId, 20);
-    let contextMessages = "";
-
-    if (history.success && history.data) {
-        contextMessages = history.data.map(m =>
-            `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`
-        ).join("\n");
-    }
-
-    // Get active project context
+    // Get active project context and conversation ID
     let userData = await getUserData(userId);
     let activeProjectPath = userData?.data?.activeProjectPath;
+    let activeConversationId = userData?.data?.conversationId;
+    let lastOutputLength = userData?.data?.lastOutputLength || 0;
 
-    // Build prompt with conversation context
-    let prompt = contextMessages ? `Previous conversation:\n${contextMessages}\n\nUser: ${text}` : text;
+    // Prompt is now just the text
+    let prompt = text;
 
     // Try to use agy CLI first, fall back to direct command execution
     let messageToEdit = await ctx.reply("🤖 Thinking...");
     
     let lastEditTime = 0;
-    let result = await runAgyCli(prompt, activeProjectPath, userData?.data?.selectedModel, async (chunk) => {
+    let result = await runAgyCli(prompt, activeProjectPath, userData?.data?.selectedModel, activeConversationId, async (fullStdout) => {
         let now = Date.now();
         if (now - lastEditTime > 1500) {
             lastEditTime = now;
             try {
-                let trimmed = chunk.length > 4000 ? chunk.substring(chunk.length - 4000) : chunk;
+                let newOutput = fullStdout;
+                if (activeConversationId && lastOutputLength > 0 && fullStdout.length >= lastOutputLength) {
+                    newOutput = fullStdout.substring(lastOutputLength).trimStart();
+                }
+                let trimmed = newOutput.length > 4000 ? newOutput.substring(newOutput.length - 4000) : newOutput;
                 if (trimmed.trim()) {
                     await ctx.api.editMessageText(ctx.chat!.id, messageToEdit.message_id, `🤖 ${trimmed}`);
                 }
@@ -114,11 +110,24 @@ export const chatMessageHandler = async (ctx: Context) => {
         return;
     }
 
+    let finalOutput = result.output;
+    if (activeConversationId && lastOutputLength > 0 && result.output.length >= lastOutputLength) {
+        finalOutput = result.output.substring(lastOutputLength).trimStart();
+    }
+
+    if (result.success && result.conversationId) {
+        await setUserData(userId, {
+            ...userData?.data,
+            conversationId: result.conversationId,
+            lastOutputLength: result.output.length
+        });
+    }
+
     // Save assistant response
-    await addMessage(userId, "assistant", result.output);
+    await addMessage(userId, "assistant", finalOutput);
 
     try {
-        let finalMessage = result.output.length > 4000 ? result.output.substring(result.output.length - 4000) : result.output;
+        let finalMessage = finalOutput.length > 4000 ? finalOutput.substring(finalOutput.length - 4000) : finalOutput;
         await ctx.api.editMessageText(ctx.chat!.id, messageToEdit.message_id, `🤖 ${finalMessage}`);
     } catch (e) {
         // If edit fails, ignore
@@ -137,6 +146,15 @@ export const clearChatHandler = async (ctx: Context) => {
     if (!isAdmin) return;
 
     let result = await clearConversation(userId);
+
+    // Clear the active session ID from user data
+    let userData = await getUserData(userId);
+    if (userData && userData.data) {
+        let newData = { ...userData.data };
+        delete newData.conversationId;
+        delete newData.lastOutputLength;
+        await setUserData(userId, newData);
+    }
 
     if (result.success) {
         await ctx.answerCallbackQuery({ text: "Chat history cleared ✅" });
