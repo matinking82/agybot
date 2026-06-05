@@ -1,4 +1,5 @@
 import { exec, spawn } from "child_process";
+import * as pty from "node-pty";
 import { promisify } from "util";
 import logger from "../core/logger";
 import path from "path";
@@ -342,4 +343,62 @@ export const getSystemInfo = async (): Promise<string> => {
 
         return "Failed to retrieve system information";
     }
+};
+
+export const getAgyUsageQuota = async (): Promise<{ name: string; quota: string }[]> => {
+    return new Promise((resolve) => {
+        try {
+            const ptyProcess = pty.spawn('agy', [], {
+                name: 'xterm-color',
+                cols: 100,
+                rows: 50,
+                cwd: process.env.HOME || '/root',
+                env: process.env as Record<string, string>
+            });
+
+            let output = '';
+            let sent = false;
+
+            ptyProcess.onData(function(data) {
+                output += data;
+                if (output.includes('for shortcuts') && !sent) {
+                    sent = true;
+                    setTimeout(() => {
+                        ptyProcess.write('/usage\r');
+                        setTimeout(() => {
+                            let stripped = output.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
+                            let lines = stripped.split('\n');
+                            let results = [];
+                            for (let i = 0; i < lines.length; i++) {
+                                let line = lines[i].trim();
+                                if (line.match(/^(Gemini|Claude|GPT-OSS)/)) {
+                                    let details = "";
+                                    for (let j = i + 1; j < lines.length; j++) {
+                                        if (lines[j].includes('Refreshes in')) {
+                                            details = lines[j].trim();
+                                            break;
+                                        }
+                                        if (lines[j].match(/^\s*(Gemini|Claude|GPT-OSS)/)) {
+                                            break;
+                                        }
+                                    }
+                                    results.push({ name: line, quota: details });
+                                }
+                            }
+                            ptyProcess.kill();
+                            resolve(results);
+                        }, 3000);
+                    }, 1000);
+                }
+            });
+            
+            // Timeout as fallback
+            setTimeout(() => {
+                ptyProcess.kill();
+                resolve([]);
+            }, 8000);
+        } catch (e) {
+            resolve([]);
+        }
+    });
 };

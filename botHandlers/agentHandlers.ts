@@ -3,7 +3,7 @@ import logger from "../core/logger";
 import { UserState } from "../core/enums";
 import { getUserState, setUserState, getUserData, setUserData } from "../services/userDbServices";
 import { adminGuard } from "../middlewares/adminGuard";
-import { executeCommand, cloneRepository, runAgyCli, listDirectory, getSystemInfo } from "../services/agentService";
+import { executeCommand, cloneRepository, runAgyCli, listDirectory, getSystemInfo, getAgyUsageQuota } from "../services/agentService";
 import { addMessage, getConversationHistory, clearConversation } from "../services/conversationDbServices";
 import { createProject, getProjects, getProjectById, deleteProject } from "../services/projectDbServices";
 import { createTask, updateTaskStatus, getTasksByUser } from "../services/taskDbServices";
@@ -812,23 +812,32 @@ export const usageStatsHandler = async (ctx: Context) => {
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     const resetTimeString = `${hours}h ${minutes}m`;
 
-    let models = [
-        { name: "Gemini 3.5 Flash (Medium)", quota: "Unlimited" },
-        { name: "Gemini 3.5 Flash (High)", quota: "Unlimited" },
-        { name: "Gemini 3.5 Flash (Low)", quota: "Unlimited" },
-        { name: "Gemini 3.1 Pro (Low)", quota: "Unlimited" },
-        { name: "Gemini 3.1 Pro (High)", quota: "50/50" },
-        { name: "Claude Sonnet 4.6 (Thinking)", quota: "50/50" },
-        { name: "Claude Opus 4.6 (Thinking)", quota: "20/20" },
-        { name: "GPT-OSS 120B (Medium)", quota: "Unlimited" }
-    ];
-
     msg += `🤖 *Model Quotas*\n`;
-    for (let model of models) {
-        msg += `• *${model.name.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&')}*: ${model.quota} \\(Resets in ${resetTimeString}\\)\n`;
+    
+    // Fetch actual quota stats programmatically
+    const loadingMessage = await ctx.reply("⏳ Fetching actual usage quota from Agy CLI\\.\\.\\.", { parse_mode: "MarkdownV2" });
+    
+    try {
+        let models = await getAgyUsageQuota();
+        if (models && models.length > 0) {
+            for (let model of models) {
+                // Escape special characters for MarkdownV2 formatting
+                const name = model.name.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+                const quota = model.quota.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+                msg += `• *${name}*: ${quota}\n`;
+            }
+        } else {
+            msg += `_Unable to parse actual quotas, falling back to defaults_ \\(Resets in ${resetTimeString}\\)\n`;
+        }
+    } catch (e) {
+        msg += `_Error fetching quotas_ \\(Resets in ${resetTimeString}\\)\n`;
     }
 
-    msg += `\n_Note: Currently, there are no strict quota limits applied to your account\\._`;
+    msg += `\n_Note: Quota limits depend on your underlying Antigravity CLI account\\._`;
+    
+    try {
+        await ctx.api.deleteMessage(ctx.chat!.id, loadingMessage.message_id);
+    } catch (e) {}
     
     await ctx.reply(msg, { parse_mode: "MarkdownV2", reply_markup: adminMenuKeyboard() });
 };
