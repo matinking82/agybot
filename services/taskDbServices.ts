@@ -88,3 +88,55 @@ export const getTasksByUser = async (userId: number, limit: number = 10) => {
         };
     }
 };
+
+// Filters on userId too, so one admin cannot read another's task by guessing an id.
+export const getTaskById = async (id: number, userId: number) => {
+    try {
+        let task = await dbContext.agentTask.findFirst({
+            where: {
+                id,
+                userId,
+            },
+        });
+
+        if (!task) {
+            return {
+                success: false,
+                message: "Task not found",
+            };
+        }
+
+        return {
+            success: true,
+            data: task,
+            message: "Task retrieved",
+        };
+    } catch (error) {
+        logger.error(error, {
+            section: "getTaskById",
+        });
+
+        return {
+            success: false,
+            message: "Failed to retrieve task",
+        };
+    }
+};
+
+export const getUsageCounts = async (userId: number) => {
+    try {
+        let [projects, tasks, messages] = await Promise.all([
+            dbContext.project.count({ where: { createdBy: userId } }),
+            dbContext.agentTask.count({ where: { userId } }),
+            dbContext.conversation.count({ where: { userId } }),
+        ]);
+
+        return { success: true, data: { projects, tasks, messages }, message: "Counts retrieved" };
+    } catch (error) {
+        logger.error(error, {
+            section: "getUsageCounts",
+        });
+
+        return { success: false, data: { projects: 0, tasks: 0, messages: 0 }, message: "Failed to retrieve counts" };
+    }
+};

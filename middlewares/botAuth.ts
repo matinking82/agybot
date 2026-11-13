@@ -4,8 +4,7 @@ import { createUser, isExist } from "../services/userDbServices";
 
 const checkChannels = async (ctx: Context) => {
     let channels = process.env.JOINCHANNELS as string;
-    if (channels === "" || channels === undefined) {
-        logger.error("No channels to check");
+    if (!channels) {
         return true;
     }
     let userId = ctx.from?.id;
@@ -55,6 +54,11 @@ const checkChannels = async (ctx: Context) => {
 export const loginUserMiddleware = async (ctx: Context, next: NextFunction) => {
     //check if channel return;
     if (ctx.channelPost) {
+        return;
+    }
+
+    // Updates without a sender (e.g. polls) have nothing to authenticate.
+    if (!ctx.from) {
         return;
     }
 

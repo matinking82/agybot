@@ -4,6 +4,7 @@ dotenv.config();
 import bot from "./bot";
 import { initializeAdmin } from "./services/adminDbServices";
 import logger from "./core/logger";
+import { getWorkspace } from "./services/agentService";
 
 
 (async () => {
@@ -19,10 +20,12 @@ import logger from "./core/logger";
         { command: "start", description: "Start the bot" },
         { command: "login", description: "Login as admin" },
         { command: "logout", description: "Logout from admin" },
+        { command: "stop", description: "Stop the running agent or command" },
+        { command: "get", description: "Download a file: /get <path>" },
         { command: "help", description: "Show help message" },
     ]);
 
     console.log("🤖 Bot with username @" + bot.botInfo.username + " is running");
-    console.log("📂 Agent workspace: " + (process.env.AGENT_WORKSPACE || "/tmp/agent-workspace"));
+    console.log("📂 Agent workspace: " + getWorkspace());
     await bot.start();
 })();

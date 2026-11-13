@@ -61,3 +61,15 @@ model AgentTask {
   @@index([userId])
   @@index([projectId])
 }
+
+model AgentSession {
+  id             Int      @id @default(autoincrement())
+  userId         BigInt
+  conversationId String
+  title          String
+  projectPath    String?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, conversationId])
+  @@index([userId])
+}

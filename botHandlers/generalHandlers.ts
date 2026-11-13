@@ -13,9 +13,7 @@ import {
     systemInfoHandler,
     taskHistoryHandler,
     handleProjectName,
-    handleProjectPath,
     handleRepoUrl,
-    handleClonePath,
     newProjectHandler,
     listProjectsHandler,
     selectProjectHandler,
@@ -32,6 +30,13 @@ import {
     modelSelectionHandler,
     selectModelHandler,
     usageStatsHandler,
+    stopHandler,
+    sessionListHandler,
+    sessionOpenHandler,
+    fileUploadHandler,
+    gitActionHandler,
+    taskViewHandler,
+    taskRerunHandler,
 } from "./agentHandlers";
 
 export const startHandler = async (ctx: Context, start = true) => {
@@ -73,6 +78,12 @@ export const callBackHandler = async (ctx: Context) => {
 
     if (!callbackData) return;
 
+    // "Confirm" button of the channel-join prompt: the middleware already re-checked membership.
+    if (callbackData === "start") {
+        await ctx.answerCallbackQuery();
+        return await startHandler(ctx);
+    }
+
     // Check admin for all callback actions
     let isAdmin = await adminGuard(userId);
     if (!isAdmin) {
@@ -102,6 +113,27 @@ export const callBackHandler = async (ctx: Context) => {
 
     if (callbackData === "chat_clear") {
         return await clearChatHandler(ctx);
+    }
+
+    if (callbackData === "agent_stop") return await stopHandler(ctx, "agent");
+    if (callbackData === "cmd_stop") return await stopHandler(ctx, "cmd");
+    if (callbackData === "session_list") return await sessionListHandler(ctx);
+    if (callbackData === "task_list") return await taskHistoryHandler(ctx);
+
+    if (callbackData.startsWith("session_open_")) {
+        return await sessionOpenHandler(ctx, parseInt(callbackData.split("_")[2]));
+    }
+
+    if (callbackData.startsWith("task_view_")) {
+        return await taskViewHandler(ctx, parseInt(callbackData.split("_")[2]));
+    }
+
+    if (callbackData.startsWith("task_rerun_")) {
+        return await taskRerunHandler(ctx, parseInt(callbackData.split("_")[2]));
+    }
+
+    if (callbackData.startsWith("git_")) {
+        return await gitActionHandler(ctx);
     }
 
     if (callbackData.startsWith("project_select_")) {
@@ -182,6 +214,14 @@ export const messagesHandler = async (ctx: Context) => {
 
     // Handle admin menu buttons (keyboard replies)
     let isAdmin = await adminGuard(userId);
+
+    // Files and photos are saved to the active project (and handed to the agent in chat mode)
+    if (ctx.message?.document || ctx.message?.photo) {
+        if (!isAdmin) {
+            return await ctx.reply("⛔ Access denied.");
+        }
+        return await fileUploadHandler(ctx);
+    }
 
     if (isAdmin) {
         switch (text) {
